@@ -1,0 +1,17 @@
+{
+    "version": "0.1",
+    "__metadata__" : {
+        "license_url" : "https://www.mygene.info",
+        "licence" : "CC BY-NC 4.0",
+        "url" : "https://www.mygene.info"
+    },
+    "dumper" : {
+        "data_url" : "http://localhost:8080/dataupload/mysrc/nodes_neo4j.csv",
+        "uncompress" : false,
+        "release" : "version:get_release"
+    },
+    "uploader" : {
+        "parser" : "parser:load_data",
+        "on_duplicates" : "ignore"
+    }
+}
