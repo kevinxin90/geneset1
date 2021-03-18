@@ -11,7 +11,8 @@ TYPE_TO_MYGENE_FIELD_MAPPING = {
 
 pathway_ids = set()
 
-def count_pathway_participants(db, record_id):
+def count_pathway_participants(rec_id):
+    [db, record_id] = rec_id.split(':')
     url = 'https://mygene.info/v3/query?q=pathway.' + db + '.id:"' + record_id + '"&size=0'
     doc = requests.get(url).json()
     return doc.get("total", 0)
@@ -23,6 +24,7 @@ def count_go_participants(_type, record_id):
     return doc.get("total", 0)
 
 def parse_pathway_response(doc):
+    res = []
     for _doc in doc['hits']:
         for db, info in _doc['pathway'].items():
             if isinstance(info, dict):
@@ -31,13 +33,18 @@ def parse_pathway_response(doc):
                 _id = db + ':' + str(record['id'])
                 if _id not in pathway_ids:
                     pathway_ids.add(_id)
-                    yield {'_id': _id,
-                            'num_of_participants': count_pathway_participants(db, str(record['id'])),
+                    res.append(
+                        {
+                            '_id': _id,
                             db: record['id'],
                             'name': record['name'],
-                            'type': 'pathway'}
+                            'type': 'pathway'
+                        }
+                    )
+    return res
 
 def parse_go_respnse(doc, _type):
+    res = []
     for _doc in doc['hits']:
         info = _doc['go'][_type.upper()]
         if isinstance(info, dict):
@@ -48,7 +55,6 @@ def parse_go_respnse(doc, _type):
                 pathway_ids.add(_id)
                 yield {'_id': _id,
                         'go': _id,
-                        'num_of_participants': count_go_participants(_type, _id),
                         'name': record['term'],
                         'type': _type}
 
@@ -57,6 +63,7 @@ def load_from_mygene(semanticType):
     url = 'http://mygene.info/v3/query?q=_exists_:' + mygene_field + '&fields=' + mygene_field + '&fetch_all=TRUE'
     cnt = 0
     total = 1
+    results = []
     while cnt < total:
         doc = requests.get(url).json()
         if total == 1:
@@ -64,11 +71,17 @@ def load_from_mygene(semanticType):
         cnt += len(doc['hits'])
         url = 'http://mygene.info/v3/query?scroll_id=' + doc['_scroll_id']
         if semanticType == "pathway":
-            for item in parse_pathway_response(doc):
-                yield item
+            results += parse_pathway_response(doc)
         else:
-            for item in parse_go_respnse(doc, semanticType):
-                yield item
+            results += parse_go_respnse(doc, semanticType)
+    if semanticType == "pathway":
+        for rec in results:
+            rec['num_of_participants'] = count_pathway_participants(rec['_id'])
+            yield rec
+    else:
+        for rec in results:
+            rec['num_of_participants'] = count_go_participants(semanticType, rec['_id'])
+            yield rec
 
 def load_data(data_folder):
     # load cellular component and biological proces info from semmed neo4j
